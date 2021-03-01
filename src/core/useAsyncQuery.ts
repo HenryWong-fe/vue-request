@@ -29,7 +29,7 @@ import {
   resolvedPromise,
   unRefObject,
 } from './utils';
-import { getCache, setCache } from './utils/cache';
+import { getCache, setCache, clearCache } from './utils/cache';
 import limitTrigger from './utils/limitTrigger';
 import subscriber from './utils/listener';
 
@@ -38,6 +38,7 @@ export type BaseResult<R, P extends unknown[]> = Omit<
   'run'
 > & {
   run: (...arg: P) => InnerRunReturn<R>;
+  reset: () => void;
 };
 
 export type Queries<R, P extends unknown[]> = {
@@ -144,7 +145,6 @@ function useAsyncQuery<R, P extends unknown[], FR>(
 
   const loading = ref(false);
   const data = ref<R>();
-  const _raw_data = ref<R>();
   const error = ref<Error>();
   const params = ref<P>();
 
@@ -162,7 +162,6 @@ function useAsyncQuery<R, P extends unknown[], FR>(
     () => {
       loading.value = latestQuery.value.loading.value;
       data.value = latestQuery.value.data.value;
-      _raw_data.value = latestQuery.value._raw_data.value;
       error.value = latestQuery.value.error.value;
       params.value = latestQuery.value.params.value;
     },
@@ -294,16 +293,29 @@ function useAsyncQuery<R, P extends unknown[], FR>(
     unsubscribeList.forEach(unsubscribe => unsubscribe());
   });
 
+  const reset = () => {
+    latestQueriesKey.value = QUERY_DEFAULT_KEY;
+    Object.keys(queries).forEach(key => {
+      queries[key].cancel();
+      if (key !== QUERY_DEFAULT_KEY) {
+        delete queries[key];
+      }
+    });
+    queries[QUERY_DEFAULT_KEY] = createQuery(query, config);
+    cacheKey && clearCache(cacheKey);
+    unsubscribeList.forEach(unsubscribe => unsubscribe());
+  };
+
   const queryState = {
     loading,
     data,
-    _raw_data,
     error,
     params,
     cancel: latestQuery.value.cancel,
     refresh: latestQuery.value.refresh,
     mutate: latestQuery.value.mutate,
     run,
+    reset,
     queries,
   } as QueryState<R, P>;
 
